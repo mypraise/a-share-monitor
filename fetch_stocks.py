@@ -91,6 +91,95 @@ BEAR_KW = [
     '做空','预警','亏','下滑','缩量','疲软',
 ]
 
+DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
+
+# ═══ LLM HOT7 NARRATIVE ANALYSIS ═════════════════════════════
+def llm_hot7(stock_scores, all_analyzed):
+    """Use DeepSeek to analyze news narratives and rank Hot7 stocks.
+    Returns list of dicts with code, name, score, reasons, news, narrative.
+    Returns None if DEEPSEEK_KEY not set or API fails (caller falls back to rule-based)."""
+    api_key = os.environ.get('DEEPSEEK_KEY', '')
+    if not api_key:
+        return None
+
+    # Build context: top 20 candidate stocks + recent bullish headlines
+    candidates = sorted(stock_scores.values(), key=lambda x: (-x['score'], -x['mentions']))[:20]
+    if len(candidates) < 3:
+        return None
+
+    # Collect top bullish headlines (most impactful, most recent)
+    bull_news = [n for n in all_analyzed if n['sentiment'] == '利好' and n['impact'] >= 1.0]
+    bull_news.sort(key=lambda x: (-x['impact'], -x['ctime']))
+    headlines = []
+    for n in bull_news[:40]:
+        stocks_str = ','.join(s['name'] for s in n['stocks'][:3])
+        sectors_str = ','.join(n['sectors'][:2])
+        headlines.append(f"[{n['date']} {n['time']}] {n['title']} | 影响:{n['impact']} | 个股:{stocks_str} | 板块:{sectors_str}")
+
+    cand_str = '\n'.join(
+        f"- {c['name']}({c['code']}): 提及{c['mentions']}次, 规则评分{c['score']:.1f}, 标签:{','.join(c['reasons'])}"
+        for c in candidates
+    )
+
+    prompt = f"""你是A股市场分析师。根据以下今日财经新闻和候选股票，分析当前市场热点叙事主线，选出最值得关注的7只热点股票。
+
+## 今日利好新闻（按影响力排序）
+{chr(10).join(headlines)}
+
+## 候选股票（规则初筛前20）
+{cand_str}
+
+## 分析要求
+1. 识别今日2-3条核心叙事主线（如"AI算力爆发"、"政策刺激消费"等）
+2. 结合叙事主线、新闻密度、政策力度、板块联动，选出TOP 7热点股
+3. 每只股票给出：叙事标签（简短，如"AI算力"）、热度评分(1-10)、一句话理由
+
+## 输出格式（严格JSON，无多余文字）
+{{"narratives":["主线1","主线2"],"hot7":[{{"code":"600XXX","name":"XX","score":9.5,"narrative":"AI算力","reason":"一句话理由"}}]}}"""
+
+    try:
+        r = requests.post(DEEPSEEK_URL, headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }, json={
+            'model': 'deepseek-chat',
+            'messages': [{'role': 'user', 'content': prompt}],
+            'temperature': 0.3,
+            'max_tokens': 800,
+        }, timeout=30)
+        data = r.json()
+        content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+        # Extract JSON from response (may have ```json wrapper)
+        content = content.strip()
+        if content.startswith('```'):
+            content = re.sub(r'^```\w*\n?', '', content)
+            content = re.sub(r'\n?```$', '', content)
+        result = json.loads(content)
+
+        hot7_llm = []
+        narratives = result.get('narratives', [])
+        for item in result.get('hot7', [])[:7]:
+            code = item.get('code', '')
+            # Match back to stock_scores for news list
+            ss = stock_scores.get(code, {})
+            hot7_llm.append({
+                'code': code,
+                'name': item.get('name', ss.get('name', '')),
+                'score': float(item.get('score', 5)),
+                'mentions': ss.get('mentions', 0),
+                'news': ss.get('news', []),
+                'reasons': {item.get('narrative', '热点')},
+                'narrative': item.get('reason', ''),
+                'narratives': narratives,
+            })
+        if len(hot7_llm) >= 5:
+            print(f"      LLM叙事主线: {', '.join(narratives)}")
+            return hot7_llm
+        return None
+    except Exception as e:
+        print(f"      LLM分析失败({e})，降级为规则策略")
+        return None
+
 # ═══ 1. FETCH NEWS ══════════════════════════════════════════
 def fetch_news(pages=4, page_size=40):
     all_news, seen = [], set()
@@ -284,7 +373,10 @@ def analyze_all(news_list):
         }
         all_analyzed.append(analyzed)
 
-    hot7 = sorted(stock_scores.values(), key=lambda x: (-x['score'],-x['mentions']))[:7]
+    # Hot7: try LLM narrative analysis first, fallback to rule-based scoring
+    hot7 = llm_hot7(stock_scores, all_analyzed)
+    if hot7 is None:
+        hot7 = sorted(stock_scores.values(), key=lambda x: (-x['score'],-x['mentions']))[:7]
 
     # Split: night news (22:00 - 08:30) vs realtime
     now = datetime.now(BJ_TZ)
