@@ -203,9 +203,15 @@ a{color:inherit;text-decoration:none}
   <div class="sec-grid" id="secGrid"></div>
 </div>
 
-<!-- ══ SECTION 4: 夜间新闻大合集 (Pro only) ══ -->
-<div data-mode="pro" style="margin-top:20px">
-  <div class="stitle fi fd4"><span class="dot" style="background:var(--ylw)"></span>夜间新闻大合集<span class="sub">22:00–08:30 共 __STATS_NIGHT__ 条 | 按影响力排序 | 标注利好利空股票/板块/ETF</span></div>
+<!-- ══ SECTION 4: 夜间新闻总结 (always, compact in simple) ══ -->
+<div data-mode="all" style="margin-top:20px">
+  <div class="stitle fi fd4"><span class="dot" style="background:var(--ylw)"></span>夜间新闻总结<span class="sub">22:00–08:30 共 __STATS_NIGHT__ 条 | 重点摘要</span></div>
+  <div id="nightSummary" class="card fi fd4" style="margin-bottom:16px;padding:16px 20px"></div>
+</div>
+
+<!-- ══ SECTION 4b: 夜间新闻详情 (Pro only) ══ -->
+<div data-mode="pro">
+  <div class="stitle fi fd4"><span class="dot" style="background:var(--ylw)"></span>夜间新闻详情<span class="sub">全部 __STATS_NIGHT__ 条 | 按影响力排序</span></div>
   <div class="card fi fd4" style="margin-bottom:16px">
     <div class="card-h">
       <div class="news-tabs" id="nightTabs">
@@ -524,6 +530,76 @@ function updateClock(){
 }
 updateClock();setInterval(updateClock,1000);
 
+// ═══ Night News Summary ═══
+function renderNightSummary(){
+  var box=document.getElementById('nightSummary');
+  if(!box||!NIGHT.length)return;
+  // Count by sentiment
+  var bc={bull:0,bear:0,neut:0};
+  NIGHT.forEach(function(n){
+    if(n.sentiment==='利好')bc.bull++;
+    else if(n.sentiment==='利空')bc.bear++;
+    else bc.neut++;
+  });
+  // Pick top headlines: all bullish (max 8) + all bearish (max 4)
+  var bulls=NIGHT.filter(function(n){return n.sentiment==='利好';}).slice(0,8);
+  var bears=NIGHT.filter(function(n){return n.sentiment==='利空';}).slice(0,4);
+  // Collect sectors/ETFs mentioned
+  var secSet=new Set();
+  NIGHT.forEach(function(n){(n.etfs||[]).forEach(function(e){secSet.add(e.name);});(n.sectors||[]).forEach(function(s){secSet.add(s);});});
+
+  var h='<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">';
+  h+='<span class="pill pill-r">利好 '+bc.bull+'</span>';
+  h+='<span class="pill pill-g">利空 '+bc.bear+'</span>';
+  h+='<span class="pill pill-y">中性 '+bc.neut+'</span>';
+  if(secSet.size>0){
+    h+='<span style="font-size:10px;color:var(--t3);padding:3px 0;margin-left:4px">涉及: ';
+    Array.from(secSet).slice(0,8).forEach(function(s){h+='<span style="color:var(--cyan);margin-right:6px">'+s+'</span>';});
+    h+='</span>';
+  }
+  h+='</div>';
+
+  if(bulls.length){
+    h+='<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--red)">▲ 利好要闻</span></div>';
+    h+='<div style="display:grid;gap:4px;margin-bottom:12px">';
+    bulls.forEach(function(n){
+      var t=n.time_str||'';var d=n.date_str||'';
+      var stks='';
+      (n.stocks||[]).forEach(function(sc){
+        var q=Q[sc.code];
+        if(q&&q.price>0){
+          var c2=cls(q.change_pct);
+          stks+=' <span class="'+c2+'" style="font-size:10px;font-weight:600">'+sc.name+' '+arrow(q.change_pct)+Math.abs(q.change_pct).toFixed(2)+'%</span>';
+        }
+      });
+      h+='<div style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid var(--bdr)">';
+      h+='<span class="mono" style="font-size:10px;color:var(--t3)">'+d+' '+t+'</span> ';
+      h+='<a href="'+n.url+'" target="_blank" style="color:var(--t1);transition:color .2s" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--t1)\'">'+n.title+'</a>';
+      if(stks)h+=stks;
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  if(bears.length){
+    h+='<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--grn)">▼ 利空关注</span></div>';
+    h+='<div style="display:grid;gap:4px">';
+    bears.forEach(function(n){
+      var t=n.time_str||'';var d=n.date_str||'';
+      h+='<div style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid var(--bdr)">';
+      h+='<span class="mono" style="font-size:10px;color:var(--t3)">'+d+' '+t+'</span> ';
+      h+='<a href="'+n.url+'" target="_blank" style="color:var(--t2);transition:color .2s" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--t2)\'">'+n.title+'</a>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  if(!bulls.length&&!bears.length){
+    h+='<div style="color:var(--t3);font-size:12px;text-align:center;padding:12px">暂无重要夜间新闻</div>';
+  }
+  box.innerHTML=h;
+}
+
 // ═══ Mode Toggle (简洁 / Pro) ═══
 var _currentMode='simple';
 function toggleMode(mode){
@@ -668,6 +744,7 @@ renderGlobalBar();
 renderPicks();
 renderHot7();
 renderSectors();
+renderNightSummary();
 setupTabs('nightTabs','nightList',NIGHT);
 setupTabs('allTabs','allList',ALL);
 startAutoRefresh();
