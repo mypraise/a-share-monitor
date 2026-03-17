@@ -151,6 +151,7 @@ a{color:inherit;text-decoration:none}
     <span class="pill" style="background:rgba(234,179,8,.08);color:#eab308;border:1px solid rgba(234,179,8,.15);font-size:10px" title="通过CREDITS_TOTAL和CREDITS_DAILY环境变量配置">__CREDITS_DISPLAY__</span>
     <span class="mono" style="font-size:10px;color:var(--t3);margin-left:6px">数据 __TIMESTAMP__</span>
     <span class="mono" id="liveClock" style="font-size:10px;color:var(--cyan);margin-left:4px"></span>
+    <span class="mono" id="refreshIndicator" style="font-size:10px;color:var(--cyan);margin-left:6px;transition:opacity .5s"></span>
   </div>
   <div class="scan"></div>
 </header>
@@ -496,11 +497,131 @@ function updateClock(){
   var M=String(bj.getMonth()+1).padStart(2,'0');
   var D=String(bj.getDate()).padStart(2,'0');
   var hr=bj.getHours(),mi=bj.getMinutes();
-  var isOpen=(bj.getDay()>=1&&bj.getDay()<=5)&&((hr===9&&mi>=30)||hr===10||hr===11||(hr===13)||(hr===14)||(hr===14&&mi<=59));
+  var isOpen=(bj.getDay()>=1&&bj.getDay()<=5)&&(((hr===9&&mi>=30)||hr===10||(hr===11&&mi<=29))||((hr===13)||(hr===14)));
   var status=isOpen?'<span style="color:#22c55e">● 盘中</span>':'<span style="color:var(--t3)">○ 休市</span>';
   document.getElementById('liveClock').innerHTML='北京 '+bj.getFullYear()+'-'+M+'-'+D+' '+hh+':'+mm+':'+ss+' '+status;
 }
 updateClock();setInterval(updateClock,1000);
+
+// ═══ Live Quote Auto-Refresh (JSONP via Tencent API) ═══
+var _refreshTimer=null;
+var _refreshCount=0;
+
+function symCode(code){
+  return code.startsWith('6')?'sh'+code:'sz'+code;
+}
+
+function isMarketOpen(){
+  var d=new Date();
+  var utc=d.getTime()+d.getTimezoneOffset()*60000;
+  var bj=new Date(utc+8*3600000);
+  var wd=bj.getDay(),hr=bj.getHours(),mi=bj.getMinutes();
+  if(wd<1||wd>5)return false;
+  if((hr===9&&mi>=25)||(hr===10)||(hr===11&&mi<=35))return true;  // slightly wider window
+  if(hr===13||hr===14||(hr===15&&mi===0))return true;
+  return false;
+}
+
+function collectAllCodes(){
+  var codes=new Set();
+  PICKS.forEach(function(p){if(p.code)codes.add(p.code);});
+  HOT7.forEach(function(s){if(s.code)codes.add(s.code);});
+  SECS.forEach(function(s){
+    if(s.etf_code)codes.add(s.etf_code);
+    (s.stocks||[]).forEach(function(sc){if(sc.code)codes.add(sc.code);});
+  });
+  Object.keys(Q).forEach(function(k){codes.add(k);});
+  return Array.from(codes);
+}
+
+function refreshQuotes(){
+  var codes=collectAllCodes();
+  if(!codes.length)return;
+  var syms=codes.map(symCode);
+  // Split into batches of 30
+  for(var i=0;i<syms.length;i+=30){
+    var batch=syms.slice(i,i+30);
+    var url='https://qt.gtimg.cn/q='+batch.join(',')+'&_t='+Date.now();
+    var sc=document.createElement('script');
+    sc.src=url;
+    sc.onload=function(){
+      // Parse global variables set by the script
+      batch.forEach(function(sym){
+        try{
+          var val=window['v_'+sym];
+          if(!val)return;
+          var f=val.split('~');
+          if(f.length>=46){
+            var code=f[2];
+            var price=parseFloat(f[3])||0;
+            var prev=parseFloat(f[4])||0;
+            var pct=parseFloat(f[32])||0;
+            var high=parseFloat(f[33])||0;
+            var low=parseFloat(f[34])||0;
+            var vol=parseInt(f[6])||0;
+            if(price>0){
+              Q[code]={price:price,prev_close:prev,change_pct:pct,high:high,low:low,volume:vol};
+              // Update PICKS data
+              PICKS.forEach(function(p){
+                if(p.code===code){
+                  p.price=price;p.change_pct=pct;p.high=high;p.low=low;
+                  p.amplitude=prev>0?((high-low)/prev*100):0;
+                }
+              });
+              // Update HOT7 data
+              HOT7.forEach(function(s){
+                if(s.code===code){s.price=price;s.change_pct=pct;}
+              });
+              // Update SECS data
+              SECS.forEach(function(s){
+                if(s.etf_code===code){s.etf_price=price;s.etf_change_pct=pct;}
+                (s.stocks||[]).forEach(function(sc){
+                  if(sc.code===code){sc.price=price;sc.change_pct=pct;}
+                });
+              });
+            }
+          }
+        }catch(e){}
+      });
+      // Re-render after last batch
+      _refreshCount++;
+      renderPicks();
+      renderHot7();
+      renderSectors();
+      updateRefreshIndicator();
+      this.parentNode.removeChild(this);
+    };
+    sc.onerror=function(){this.parentNode.removeChild(this);};
+    document.head.appendChild(sc);
+  }
+}
+
+function updateRefreshIndicator(){
+  var el=document.getElementById('refreshIndicator');
+  if(!el)return;
+  var d=new Date();
+  var utc=d.getTime()+d.getTimezoneOffset()*60000;
+  var bj=new Date(utc+8*3600000);
+  var hh=String(bj.getHours()).padStart(2,'0');
+  var mm=String(bj.getMinutes()).padStart(2,'0');
+  var ss=String(bj.getSeconds()).padStart(2,'0');
+  el.innerHTML='<span style="color:var(--cyan)">⚡ 实时</span> '+hh+':'+mm+':'+ss+' ('+_refreshCount+'次)';
+  el.style.opacity='1';
+  setTimeout(function(){el.style.opacity='0.6';},2000);
+}
+
+function startAutoRefresh(){
+  if(_refreshTimer)return;
+  _refreshTimer=setInterval(function(){
+    if(isMarketOpen()){
+      refreshQuotes();
+    }else{
+      // Check every 60s if market opened
+    }
+  },15000);  // 15 seconds
+  // Also do an immediate refresh
+  if(isMarketOpen()){refreshQuotes();}
+}
 
 // ═══ Init ═══
 renderGlobalBar();
@@ -509,6 +630,7 @@ renderHot7();
 renderSectors();
 setupTabs('nightTabs','nightList',NIGHT);
 setupTabs('allTabs','allList',ALL);
+startAutoRefresh();
 </script>
 </body>
 </html>
