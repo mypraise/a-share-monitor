@@ -149,7 +149,8 @@ a{color:inherit;text-decoration:none}
     <span class="pill" style="background:rgba(6,182,212,.08);color:var(--cyan);border:1px solid rgba(6,182,212,.15);font-size:10px">实时 __STATS_RT__ · 夜间 __STATS_NIGHT__</span>
     <span class="pill" style="background:rgba(129,140,248,.08);color:#818cf8;border:1px solid rgba(129,140,248,.15);font-size:10px" title="API调用: 同花顺×3页 + 腾讯行情 + 腾讯K线 + Telegram">耗时 __RUN_ELAPSED__s · API __RUN_API_CALLS__次</span>
     <span class="pill" style="background:rgba(234,179,8,.08);color:#eab308;border:1px solid rgba(234,179,8,.15);font-size:10px" title="通过CREDITS_TOTAL和CREDITS_DAILY环境变量配置">__CREDITS_DISPLAY__</span>
-    <span class="mono" style="font-size:10px;color:var(--t3);margin-left:6px">__TIMESTAMP__</span>
+    <span class="mono" style="font-size:10px;color:var(--t3);margin-left:6px">数据 __TIMESTAMP__</span>
+    <span class="mono" id="liveClock" style="font-size:10px;color:var(--cyan);margin-left:4px"></span>
   </div>
   <div class="scan"></div>
 </header>
@@ -418,6 +419,23 @@ function setupTabs(tabsId, listId, allData){
   tabs.addEventListener('click',e=>{if(e.target.classList.contains('ntab'))render(e.target.dataset.f)});
   render('all');
 }
+
+// ═══ Live Beijing Clock ═══
+function updateClock(){
+  var d=new Date();
+  var utc=d.getTime()+d.getTimezoneOffset()*60000;
+  var bj=new Date(utc+8*3600000);
+  var hh=String(bj.getHours()).padStart(2,'0');
+  var mm=String(bj.getMinutes()).padStart(2,'0');
+  var ss=String(bj.getSeconds()).padStart(2,'0');
+  var M=String(bj.getMonth()+1).padStart(2,'0');
+  var D=String(bj.getDate()).padStart(2,'0');
+  var hr=bj.getHours(),mi=bj.getMinutes();
+  var isOpen=(bj.getDay()>=1&&bj.getDay()<=5)&&((hr===9&&mi>=30)||hr===10||hr===11||(hr===13)||(hr===14)||(hr===14&&mi<=59));
+  var status=isOpen?'<span style="color:#22c55e">● 盘中</span>':'<span style="color:var(--t3)">○ 休市</span>';
+  document.getElementById('liveClock').innerHTML='北京 '+bj.getFullYear()+'-'+M+'-'+D+' '+hh+':'+mm+':'+ss+' '+status;
+}
+updateClock();setInterval(updateClock,1000);
 
 // ═══ Init ═══
 renderPicks();
