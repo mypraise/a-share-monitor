@@ -24,6 +24,16 @@ body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--t1);
 .mono{font-family:'JetBrains Mono',monospace}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--t3);border-radius:2px}
 a{color:inherit;text-decoration:none}
+
+/* Mode toggle */
+.mode-toggle{display:flex;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;flex-shrink:0}
+.mode-btn{padding:4px 14px;font-size:11px;font-weight:600;color:var(--t3);border:none;background:transparent;cursor:pointer;transition:all .2s;font-family:'Noto Sans SC',sans-serif}
+.mode-btn.active{background:var(--cyan2);color:var(--cyan);border-color:rgba(6,182,212,.3)}
+.mode-simple [data-mode="pro"]{display:none!important}
+.mode-simple .two-col{display:block}
+.mode-simple .two-col>div{margin-bottom:16px}
+.mode-simple .pick-section-bc{display:none!important}
+
 .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;transition:border-color .3s}
 .card:hover{border-color:rgba(6,182,212,.18)}
 .card-h{padding:14px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
@@ -139,6 +149,10 @@ a{color:inherit;text-decoration:none}
   <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <h1>A股利好监控</h1>
     <span style="font-size:10px;background:rgba(6,182,212,.08);color:var(--cyan);padding:3px 10px;border-radius:4px;border:1px solid rgba(6,182,212,.12)">同花顺 7x24</span>
+    <div class="mode-toggle" id="modeToggle">
+      <button class="mode-btn active" data-m="simple" onclick="toggleMode('simple')">简洁</button>
+      <button class="mode-btn" data-m="pro" onclick="toggleMode('pro')">Pro</button>
+    </div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
     <span class="pill pill-r">利好 __STATS_BULL__</span>
@@ -171,48 +185,54 @@ a{color:inherit;text-decoration:none}
 
 <div class="page">
 
-<!-- ══ SECTION 1: 实时新闻利好精选 ══ -->
-<div class="stitle fi fd1"><span class="dot" style="background:var(--red)"></span>实时新闻 · 利好精选<span class="sub">利好程度×时效×弹性综合排序 | S/A/B/C影响等级 | 连涨龙头(当前+历史) | 实时报价</span></div>
-<div class="pick-grid" id="pickGrid"></div>
+<!-- ══ SECTION 1: 今日热点股 TOP7 (always visible, full-width in simple) ══ -->
+<div data-mode="all">
+  <div class="stitle fi fd1"><span class="dot" style="background:var(--cyan)"></span>今日热点股 TOP 7<span class="sub" id="narrativeBanner"></span></div>
+  <div class="hot-grid" id="hotGrid"></div>
+</div>
 
-<!-- ══ SECTION 2: 今日热点股 + 热门板块/ETF ══ -->
-<div class="two-col" style="margin-top:16px">
-  <div>
-    <div class="stitle fi fd2"><span class="dot" style="background:var(--cyan)"></span>今日热点股 TOP 7<span class="sub" id="narrativeBanner"></span></div>
-    <div class="hot-grid" id="hotGrid"></div>
-  </div>
-  <div>
-    <div class="stitle fi fd3"><span class="dot" style="background:var(--pur)"></span>热门板块 / ETF<span class="sub">情绪分布 + ETF实时行情 + 关联个股</span></div>
-    <div class="sec-grid" id="secGrid"></div>
+<!-- ══ SECTION 2: 实时利好精选 (S/A always, B/C only in Pro) ══ -->
+<div data-mode="all" style="margin-top:16px">
+  <div class="stitle fi fd2"><span class="dot" style="background:var(--red)"></span>实时新闻 · 利好精选<span class="sub">利好程度×时效×弹性综合排序 | S/A/B/C影响等级 | 连涨龙头(当前+历史) | 实时报价</span></div>
+  <div class="pick-grid" id="pickGrid"></div>
+</div>
+
+<!-- ══ SECTION 3: 热门板块/ETF (always visible) ══ -->
+<div data-mode="all" style="margin-top:16px">
+  <div class="stitle fi fd3"><span class="dot" style="background:var(--pur)"></span>热门板块 / ETF<span class="sub">情绪分布 + ETF实时行情 + 关联个股</span></div>
+  <div class="sec-grid" id="secGrid"></div>
+</div>
+
+<!-- ══ SECTION 4: 夜间新闻大合集 (Pro only) ══ -->
+<div data-mode="pro" style="margin-top:20px">
+  <div class="stitle fi fd4"><span class="dot" style="background:var(--ylw)"></span>夜间新闻大合集<span class="sub">22:00–08:30 共 __STATS_NIGHT__ 条 | 按影响力排序 | 标注利好利空股票/板块/ETF</span></div>
+  <div class="card fi fd4" style="margin-bottom:16px">
+    <div class="card-h">
+      <div class="news-tabs" id="nightTabs">
+        <button class="ntab active" data-f="all">全部</button>
+        <button class="ntab" data-f="利好">利好</button>
+        <button class="ntab" data-f="利空">利空</button>
+        <button class="ntab" data-f="中性">中性</button>
+      </div>
+    </div>
+    <div class="nlist" id="nightList"></div>
   </div>
 </div>
 
-<!-- ══ SECTION 3: 夜间新闻大合集 ══ -->
-<div class="stitle fi fd4" style="margin-top:20px"><span class="dot" style="background:var(--ylw)"></span>夜间新闻大合集<span class="sub">22:00–08:30 共 __STATS_NIGHT__ 条 | 按影响力排序 | 标注利好利空股票/板块/ETF</span></div>
-<div class="card fi fd4" style="margin-bottom:16px">
-  <div class="card-h">
-    <div class="news-tabs" id="nightTabs">
-      <button class="ntab active" data-f="all">全部</button>
-      <button class="ntab" data-f="利好">利好</button>
-      <button class="ntab" data-f="利空">利空</button>
-      <button class="ntab" data-f="中性">中性</button>
+<!-- ══ SECTION 5: 全部资讯 (Pro only) ══ -->
+<div data-mode="pro">
+  <div class="stitle fi fd5"><span class="dot" style="background:var(--t3)"></span>全部资讯<span class="sub">__STATS_TOTAL__ 条 | 实时 __STATS_RT__ + 夜间 __STATS_NIGHT__</span></div>
+  <div class="card fi fd5">
+    <div class="card-h">
+      <div class="news-tabs" id="allTabs">
+        <button class="ntab active" data-f="all">全部</button>
+        <button class="ntab" data-f="利好">利好</button>
+        <button class="ntab" data-f="利空">利空</button>
+        <button class="ntab" data-f="中性">中性</button>
+      </div>
     </div>
+    <div class="nlist" id="allList"></div>
   </div>
-  <div class="nlist" id="nightList"></div>
-</div>
-
-<!-- ══ SECTION 4: 全部资讯 ══ -->
-<div class="stitle fi fd5"><span class="dot" style="background:var(--t3)"></span>全部资讯<span class="sub">__STATS_TOTAL__ 条 | 实时 __STATS_RT__ + 夜间 __STATS_NIGHT__</span></div>
-<div class="card fi fd5">
-  <div class="card-h">
-    <div class="news-tabs" id="allTabs">
-      <button class="ntab active" data-f="all">全部</button>
-      <button class="ntab" data-f="利好">利好</button>
-      <button class="ntab" data-f="利空">利空</button>
-      <button class="ntab" data-f="中性">中性</button>
-    </div>
-  </div>
-  <div class="nlist" id="allList"></div>
 </div>
 
 </div>
@@ -248,7 +268,8 @@ function renderPicks(){
   ['S','A','B','C'].forEach(lvl=>{
     const items=groups[lvl];
     if(!items.length)return;
-    html+=`<div class="pick-section-label"><span class="sl-icon" style="background:${lvlColors[lvl]}">${lvl}</span>${lvlNames[lvl]}<span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:auto">${items.length}只</span></div>`;
+    const bcCls=(lvl==='B'||lvl==='C')?'pick-section-bc':'';
+    html+=`<div class="pick-section-label ${bcCls}"><span class="sl-icon" style="background:${lvlColors[lvl]}">${lvl}</span>${lvlNames[lvl]}<span style="font-size:11px;font-weight:400;color:var(--t3);margin-left:auto">${items.length}只</span></div>`;
     items.forEach(p=>{
       const c=cls(p.change_pct);
       const streakCls=p.streak>=3?'streak-hot':p.streak>=1?'streak-warm':'streak-none';
@@ -267,7 +288,7 @@ function renderPicks(){
       }).join('')}<span style="font-size:8px;color:var(--t3);margin-left:4px;align-self:center">近${daily.length}日</span></div>`:'';
       const digest=(p.news_digest||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
       const newsLink=p.news_url||'';
-      html+=`<div class="pick-card level-${p.level||'C'}" ${newsLink?`onclick="window.open('${newsLink}','_blank')"`:''}">
+      html+=`<div class="pick-card level-${p.level||'C'} ${bcCls}" ${newsLink?`onclick="window.open('${newsLink}','_blank')"`:''}">
         <div class="pick-tip"><b style="color:var(--red)">[${p.level}级利好]</b> ${p.news_title}<br><span style="color:var(--t3);margin-top:4px;display:inline-block">${digest||'暂无摘要'}</span><br><span style="font-size:10px;color:var(--cyan);margin-top:4px;display:inline-block">${newsLink?'点击查看原文 →':'无链接'}</span></div>
         <div class="elasticity-bar" style="width:${barW}%;background:linear-gradient(90deg,${lvlColors[p.level||'C']}88,transparent)"></div>
         <div class="pick-head">
@@ -502,6 +523,25 @@ function updateClock(){
   document.getElementById('liveClock').innerHTML='北京 '+bj.getFullYear()+'-'+M+'-'+D+' '+hh+':'+mm+':'+ss+' '+status;
 }
 updateClock();setInterval(updateClock,1000);
+
+// ═══ Mode Toggle (简洁 / Pro) ═══
+var _currentMode='simple';
+function toggleMode(mode){
+  _currentMode=mode;
+  document.body.className=mode==='simple'?'mode-simple':'mode-pro';
+  document.querySelectorAll('#modeToggle .mode-btn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-m')===mode);
+  });
+  try{localStorage.setItem('dashMode',mode);}catch(e){}
+  renderPicks();
+}
+(function(){
+  try{var m=localStorage.getItem('dashMode');if(m==='pro'||m==='simple')_currentMode=m;}catch(e){}
+  document.body.className=_currentMode==='simple'?'mode-simple':'mode-pro';
+  document.querySelectorAll('#modeToggle .mode-btn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-m')===_currentMode);
+  });
+})();
 
 // ═══ Live Quote Auto-Refresh (JSONP via Tencent API) ═══
 var _refreshTimer=null;
