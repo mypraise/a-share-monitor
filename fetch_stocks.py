@@ -197,6 +197,81 @@ def fetch_news(pages=4, page_size=40):
             except: pass
     return all_news
 
+# ═══ 1b. FETCH GLOBAL MARKETS ═════════════════════════════
+GLOBAL_CODES = 'usDJI,usIXIC,usINX,hkHSI,hf_CL,hf_GC,hf_OIL'
+GLOBAL_META = {
+    '.DJI':  {'name':'道琼斯','weight':0.15,'invert':False},
+    '.IXIC': {'name':'纳斯达克','weight':0.15,'invert':False},
+    '.INX':  {'name':'标普500','weight':0.10,'invert':False},
+    'HSI':   {'name':'恒生指数','weight':0.25,'invert':False},
+    'hf_CL': {'name':'WTI原油','weight':0.10,'invert':True},
+    'hf_GC': {'name':'纽约黄金','weight':0.10,'invert':True},
+    'hf_OIL':{'name':'布伦特原油','weight':0.15,'invert':True},
+}
+
+def fetch_global_markets():
+    items = []
+    try:
+        r = requests.get(f'https://qt.gtimg.cn/q={GLOBAL_CODES}', headers=QT, timeout=10)
+        for ln in r.text.strip().split('\n'):
+            ln = ln.strip()
+            if not ln or '=""' in ln: continue
+            m = re.search(r'v_(\w+)="(.+)"', ln)
+            if not m: continue
+            key = m.group(1)
+            raw = m.group(2)
+            # Commodity format (hf_*): comma-delimited
+            if key.startswith('hf_'):
+                f = raw.split(',')
+                if len(f) >= 8:
+                    price = float(f[0] or 0)
+                    prev = float(f[7] or 0)
+                    pct = ((price - prev) / prev * 100) if prev else 0
+                    meta = GLOBAL_META.get(key, {})
+                    items.append({'key':key,'name':meta.get('name',key),'price':price,'change_pct':round(pct,2)})
+            else:
+                # Index format: tilde-delimited
+                f = raw.split('~')
+                if len(f) >= 35:
+                    code = f[2]
+                    price = float(f[3] or 0)
+                    prev = float(f[4] or 0)
+                    pct = float(f[32] or 0) if f[32] else (((price-prev)/prev*100) if prev else 0)
+                    meta = GLOBAL_META.get(code, {})
+                    items.append({'key':code,'name':meta.get('name',code),'price':price,'change_pct':round(pct,2)})
+    except Exception as e:
+        print(f"      [WARN] 外围行情获取失败: {e}")
+
+    # Compute composite sentiment score (0-100)
+    if not items:
+        return {'items':items,'score':50,'label':'中性','color':'#94a3b8'}
+
+    weighted_sum = 0
+    total_weight = 0
+    for it in items:
+        meta = GLOBAL_META.get(it['key'], {})
+        w = meta.get('weight', 0.1)
+        pct = it['change_pct']
+        if meta.get('invert', False):
+            pct = -pct  # Gold/Oil up = risk-off, invert for A-share sentiment
+        weighted_sum += pct * w
+        total_weight += w
+
+    avg_change = weighted_sum / total_weight if total_weight else 0
+    # Map avg_change to 0-100 scale: -3% → 0, 0% → 50, +3% → 100
+    score = max(0, min(100, 50 + avg_change / 3 * 50))
+    score = round(score, 1)
+
+    if score >= 80: label, color = '极度乐观', '#ef4444'
+    elif score >= 65: label, color = '乐观', '#f97316'
+    elif score >= 55: label, color = '偏多', '#eab308'
+    elif score >= 45: label, color = '中性', '#94a3b8'
+    elif score >= 35: label, color = '偏空', '#a3e635'
+    elif score >= 20: label, color = '恐慌', '#22c55e'
+    else: label, color = '极度恐慌', '#16a34a'
+
+    return {'items':items, 'score':score, 'label':label, 'color':color}
+
 # ═══ 2. FETCH QUOTES ════════════════════════════════════════
 def sym(code):
     return f'sh{code}' if code.startswith('6') else f'sz{code}'
@@ -504,7 +579,7 @@ def build_realtime_picks(realtime_news, quotes, klines, streaks):
     return picks[:20]
 
 # ═══ 6. GENERATE HTML ══════════════════════════════════════
-def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summary, realtime_picks, streaks=None, run_elapsed=0, run_api_calls=0):
+def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summary, realtime_picks, streaks=None, run_elapsed=0, run_api_calls=0, global_markets=None):
     now = datetime.now(BJ_TZ).strftime('%Y-%m-%d %H:%M:%S')
     bull_c = sum(1 for n in all_news if n['sentiment']=='利好')
     bear_c = sum(1 for n in all_news if n['sentiment']=='利空')
@@ -561,6 +636,7 @@ def generate_html(hot7, realtime_news, night_news, all_news, quotes, sector_summ
         '__STATS_RT__': str(len(realtime_news)),
         '__RUN_ELAPSED__': f'{run_elapsed:.1f}',
         '__RUN_API_CALLS__': str(run_api_calls),
+        '__GLOBAL_MARKETS_JSON__': j(global_markets or {'items':[],'score':50,'label':'中性','color':'#94a3b8'}),
     }
 
     # Credits display from environment variables
@@ -830,6 +906,8 @@ def run_watch(tg_token, tg_chat, interval=120, min_impact=1.5):
 # ═══ 10. FULL SUMMARY FETCH & SEND ════════════════════════
 def do_full_summary(tg_token, tg_chat):
     """Fetch all data and send a full summary (Hot7 + realtime picks) to Telegram."""
+    print(f"  [汇总] 获取外围行情...")
+    global_markets = fetch_global_markets()
     print(f"  [汇总] 抓取新闻...")
     news = fetch_news(pages=4, page_size=40)
     print(f"  [汇总] {len(news)}条 → 分析中...")
@@ -858,6 +936,16 @@ def do_full_summary(tg_token, tg_chat):
 
     msg = build_tg_message(hot7e_msg, rt_picks, quotes)
     send_telegram(tg_token, tg_chat, msg)
+
+    # Also regenerate dashboard
+    try:
+        html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, global_markets=global_markets)
+        with open('/workspace/output/index.html', 'w', encoding='utf-8') as f:
+            f.write(html)
+        print(f"  [汇总] 面板已更新")
+    except Exception as e:
+        print(f"  [汇总] 面板更新失败: {e}")
+
     print(f"  [汇总] 推送完成 (Hot7 + {len(rt_picks)}只精选)")
 
 # ═══ 11. BOT MODE (command listener + scheduled push) ═════
@@ -1094,12 +1182,24 @@ if __name__ == '__main__':
     # Normal mode: full dashboard + optional summary push
     _run_start = time.time()
     _api_calls = 0
-    print("[1/5] 获取同花顺资讯 (全部+重要+机会)...")
+
+    print("[1/6] 获取外围市场行情...")
+    global_markets = fetch_global_markets()
+    _api_calls += 1
+    gm = global_markets
+    if gm['items']:
+        parts = [f"{it['name']}{'+' if it['change_pct']>=0 else ''}{it['change_pct']}%" for it in gm['items']]
+        print(f"      {' | '.join(parts)}")
+        print(f"      综合情绪: {gm['label']} ({gm['score']}分)")
+    else:
+        print("      [WARN] 未获取到外围数据")
+
+    print("[2/6] 获取同花顺资讯 (全部+重要+机会)...")
     news = fetch_news(pages=4, page_size=40)
     _api_calls += 12  # 3 tags × 4 pages
     print(f"      {len(news)} 条")
 
-    print("[2/5] 分析情绪 / 提取热点...")
+    print("[3/6] 分析情绪 / 提取热点...")
     hot7, rt_news, night_news, all_news, all_codes, sec_sum = analyze_all(news)
     print(f"      利好{sum(1 for n in all_news if n['sentiment']=='利好')} / 利空{sum(1 for n in all_news if n['sentiment']=='利空')} / 中性{sum(1 for n in all_news if n['sentiment']=='中性')}")
     print(f"      实时{len(rt_news)} / 夜间{len(night_news)}")
@@ -1109,7 +1209,7 @@ if __name__ == '__main__':
     for s in sec_sum:
         if s['etf_code']: etf_codes.add(s['etf_code'])
 
-    print(f"[3/5] 获取{len(all_codes)}只股票 + {len(etf_codes)}只ETF行情...")
+    print(f"[4/6] 获取{len(all_codes)}只股票 + {len(etf_codes)}只ETF行情...")
     quotes = fetch_quotes(list(all_codes) + list(etf_codes))
     _api_calls += max(1, (len(all_codes) + len(etf_codes) + 29) // 30)  # batch of 30
     print(f"      {len(quotes)}条报价")
@@ -1121,7 +1221,7 @@ if __name__ == '__main__':
             for sc in n['stocks']: kline_codes.add(sc['code'])
     kline_codes = [c for c in kline_codes if c in quotes and quotes[c].get('price',0) > 0]
 
-    print(f"[4/5] 获取{len(kline_codes)}只股票日K (连涨分析)...")
+    print(f"[5/6] 获取{len(kline_codes)}只股票日K (连涨分析)...")
     klines = fetch_kline(kline_codes[:50], days=10)
     _api_calls += min(len(kline_codes), 50)  # 1 call per stock
     streaks = compute_consecutive_ups(klines)
@@ -1136,9 +1236,9 @@ if __name__ == '__main__':
     rt_picks = build_realtime_picks(rt_news, quotes, klines, streaks)
     print(f"      实时利好精选: {len(rt_picks)}只")
 
-    print("[5/6] 生成面板...")
+    print("[6/7] 生成面板...")
     _run_elapsed = time.time() - _run_start
-    html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, run_elapsed=_run_elapsed, run_api_calls=_api_calls)
+    html = generate_html(hot7, rt_news, night_news, all_news, quotes, sec_sum, rt_picks, streaks, run_elapsed=_run_elapsed, run_api_calls=_api_calls, global_markets=global_markets)
     out = '/workspace/output/index.html'
     with open(out, 'w', encoding='utf-8') as f:
         f.write(html)
@@ -1147,7 +1247,7 @@ if __name__ == '__main__':
     # Telegram push
     targets = build_targets()
     if tg_token and targets:
-        print(f"[6/6] 推送到 Telegram ({', '.join(targets)})...")
+        print(f"[7/7] 推送到 Telegram ({', '.join(targets)})...")
         # Build enriched hot7 for message
         hot7e_msg = []
         for s in hot7:
@@ -1155,5 +1255,5 @@ if __name__ == '__main__':
         msg = build_tg_message(hot7e_msg, rt_picks, quotes)
         send_telegram(tg_token, targets, msg)
     else:
-        print("[6/6] 跳过推送 (未设置 TG_TOKEN / TG_CHAT_ID)")
+        print("[7/7] 跳过推送 (未设置 TG_TOKEN / TG_CHAT_ID)")
         print("      设置方法: export TG_TOKEN='你的bot_token' TG_CHAT_ID='你的chat_id'")

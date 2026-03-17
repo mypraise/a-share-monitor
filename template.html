@@ -155,6 +155,19 @@ a{color:inherit;text-decoration:none}
   <div class="scan"></div>
 </header>
 
+<!-- ══ GLOBAL MARKET SENTIMENT BAR ══ -->
+<div id="globalBar" style="background:rgba(15,23,42,.85);border-bottom:1px solid var(--bdr);padding:10px 24px;backdrop-filter:blur(12px)">
+  <div style="max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <span style="font-size:11px;color:var(--t2);font-weight:600;letter-spacing:1px">外围情绪</span>
+      <div id="gaugeBox" style="width:100px;height:50px;flex-shrink:0"></div>
+      <span id="gaugeLabel" style="font-size:13px;font-weight:700;min-width:60px"></span>
+    </div>
+    <div style="width:1px;height:32px;background:var(--bdr);flex-shrink:0"></div>
+    <div id="globalItems" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:1"></div>
+  </div>
+</div>
+
 <div class="page">
 
 <!-- ══ SECTION 1: 实时新闻利好精选 ══ -->
@@ -203,6 +216,7 @@ a{color:inherit;text-decoration:none}
 
 </div>
 <script>
+const GMARKET=__GLOBAL_MARKETS_JSON__;
 const HOT7=__HOT7_JSON__;
 const PICKS=__PICKS_JSON__;
 const NIGHT=__NIGHT_NEWS_JSON__;
@@ -420,6 +434,57 @@ function setupTabs(tabsId, listId, allData){
   render('all');
 }
 
+// ═══ Global Market Sentiment ═══
+function renderGlobalBar(){
+  var items=GMARKET.items||[];
+  var box=document.getElementById('globalItems');
+  if(!box||!items.length)return;
+  var h='';
+  items.forEach(function(it){
+    var pct=it.change_pct;
+    var clr=pct>0?'var(--red)':pct<0?'var(--grn)':'var(--t3)';
+    var sign=pct>0?'+':'';
+    var p=it.price;
+    var ps=p>=10000?p.toFixed(0):p>=100?p.toFixed(1):p.toFixed(2);
+    h+='<div style="display:flex;flex-direction:column;align-items:center;min-width:80px">';
+    h+='<span style="font-size:9px;color:var(--t3);margin-bottom:2px">'+it.name+'</span>';
+    h+='<span style="font-size:13px;font-weight:600;color:'+clr+';font-family:var(--mono)">'+ps+'</span>';
+    h+='<span style="font-size:10px;color:'+clr+';font-family:var(--mono)">'+sign+pct.toFixed(2)+'%</span>';
+    h+='</div>';
+  });
+  box.innerHTML=h;
+
+  // Gauge label
+  var lb=document.getElementById('gaugeLabel');
+  if(lb) lb.innerHTML='<span style="color:'+GMARKET.color+'">'+GMARKET.label+'</span><span style="font-size:10px;color:var(--t3);margin-left:4px">'+GMARKET.score+'</span>';
+
+  // Mini ECharts gauge
+  var gbox=document.getElementById('gaugeBox');
+  if(!gbox||typeof echarts==='undefined')return;
+  var chart=echarts.init(gbox,null,{renderer:'svg'});
+  chart.setOption({
+    series:[{
+      type:'gauge',
+      startAngle:180,endAngle:0,
+      min:0,max:100,
+      radius:'95%',center:['50%','85%'],
+      progress:{show:true,width:6,roundCap:true,
+        itemStyle:{color:GMARKET.color}
+      },
+      pointer:{show:true,length:'60%',width:3,
+        itemStyle:{color:GMARKET.color}
+      },
+      axisLine:{lineStyle:{width:6,color:[[0.2,'#16a34a'],[0.35,'#22c55e'],[0.45,'#a3e635'],[0.55,'#94a3b8'],[0.65,'#eab308'],[0.8,'#f97316'],[1,'#ef4444']]}},
+      axisTick:{show:false},
+      splitLine:{show:false},
+      axisLabel:{show:false},
+      title:{show:false},
+      detail:{show:false},
+      data:[{value:GMARKET.score}]
+    }]
+  });
+}
+
 // ═══ Live Beijing Clock ═══
 function updateClock(){
   var d=new Date();
@@ -438,6 +503,7 @@ function updateClock(){
 updateClock();setInterval(updateClock,1000);
 
 // ═══ Init ═══
+renderGlobalBar();
 renderPicks();
 renderHot7();
 renderSectors();
