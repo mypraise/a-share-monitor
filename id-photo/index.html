@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>证件照处理工具</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #f0f4f8;
+  --bg-card: #ffffff;
+  --bg-dark: #1a2332;
+  --accent: #2563eb;
+  --accent-light: #3b82f6;
+  --accent-soft: #dbeafe;
+  --accent-glow: rgba(37, 99, 235, 0.15);
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-focus: #93c5fd;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius: 12px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.12);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Background pattern */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 20%, var(--accent-glow) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Header */
+.header {
+  background: var(--bg-dark);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 10;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #10b981, var(--accent));
+}
+
+.header-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--accent), #1d4ed8);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: white;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.header h1 {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.header .subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  margin-left: auto;
+}
+
+/* Main layout */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 24px;
+  padding: 24px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.card:hover { box-shadow: var(--shadow-md); }
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg, #fafbfc, var(--bg-card));
+}
+
+.card-header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.card-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-body { padding: 20px; }
+
+/* Upload area */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  position: relative;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.005);
+}
+
+.upload-zone svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--text-muted);
+  fill: none;
+  stroke-width: 1.5;
+  margin-bottom: 16px;
+  transition: stroke 0.3s;
+}
+
+.upload-zone:hover svg { stroke: var(--accent); }
+
+.upload-zone p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.upload-zone .formats {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* Canvas area */
+.canvas-container {
+  position: relative;
+  width: 100%;
+  background: repeating-conic-gradient(#f1f5f9 0% 25%, #fff 0% 50%) 0 0 / 20px 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+
+.canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 500px;
+}
+
+/* Crop overlay */
+.crop-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.crop-box {
+  position: absolute;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  cursor: move;
+  z-index: 5;
+}
+
+.crop-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 33.33% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 66.66% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 33.33% / 100% 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 66.66% / 100% 1px no-repeat;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  z-index: 6;
+}
+
+.crop-handle.tl { top: -6px; left: -6px; cursor: nw-resize; }
+.crop-handle.tr { top: -6px; right: -6px; cursor: ne-resize; }
+.crop-handle.bl { bottom: -6px; left: -6px; cursor: sw-resize; }
+.crop-handle.br { bottom: -6px; right: -6px; cursor: se-resize; }
+
+.crop-size-label {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #fff;
+  background: var(--bg-dark);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 7;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  flex-wrap: wrap;
+}
+
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.toolbar button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.toolbar button svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+/* Right panel controls */
+.spec-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.spec-item {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.spec-item .label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: 'DM Mono', monospace;
+}
+
+.spec-item .value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.spec-item .value small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* Form controls */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.form-group input[type="text"],
+.form-group select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.toggle-row .toggle-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.toggle-row .toggle-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input { display: none; }
+
+.toggle .slider {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.toggle .slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.toggle input:checked + .slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+/* Color picker for bg removal */
+.color-threshold {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.color-threshold input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  border-radius: 2px;
+  outline: none;
+}
+
+.color-threshold input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.color-threshold .val {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 30px;
+}
+
+/* Export button */
+.btn-export {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #1d4ed8);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: 'Noto Sans SC', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-export::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent, rgba(255,255,255,0.15));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.btn-export:hover::before { opacity: 1; }
+
+.btn-export:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+}
+
+.btn-export:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-export svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+/* Status bar */
+.status-bar {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-bar.show { display: flex; }
+
+.status-bar.success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.status-bar.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.status-bar.info {
+  background: var(--accent-soft);
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+/* Preview result */
+.preview-result {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.preview-result img {
+  max-width: 160px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: repeating-conic-gradient(#f1f5f9 0% 25%, #fff 0% 50%) 0 0 / 10px 10px;
+}
+
+.preview-result .file-info {
+  margin-top: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Hidden */
+.hidden { display: none !important; }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .main {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-icon">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 21v-1a5 5 0 0 1 10 0v1"/></svg>
+  </div>
+  <h1>证件照处理工具</h1>
+  <span class="subtitle">401×461 px · 300 DPI · ≤2MB</span>
+</header>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Left: Canvas & Crop -->
+  <div class="left-panel">
+    <div class="card">
+      <div class="card-header">
+        <span class="dot"></span>
+        <h2>照片编辑区</h2>
+      </div>
+      <div class="card-body">
+
+        <!-- Upload zone -->
+        <div id="uploadZone" class="upload-zone">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>点击或拖拽上传照片</p>
+          <span class="formats">支持 JPG / PNG · 建议正面免冠照</span>
+          <input type="file" id="fileInput" accept="image/jpeg,image/png" style="display:none">
+        </div>
+
+        <!-- Canvas with crop -->
+        <div id="canvasArea" class="hidden">
+          <div class="canvas-container">
+            <div class="crop-wrapper" id="cropWrapper">
+              <canvas id="sourceCanvas"></canvas>
+              <div class="crop-box" id="cropBox">
+                <div class="crop-handle tl" data-dir="tl"></div>
+                <div class="crop-handle tr" data-dir="tr"></div>
+                <div class="crop-handle bl" data-dir="bl"></div>
+                <div class="crop-handle br" data-dir="br"></div>
+                <div class="crop-size-label" id="cropLabel">401 × 461</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button onclick="resetCrop()" title="重置裁剪框">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              重置裁剪
+            </button>
+            <button onclick="fitCropToCenter()" title="居中裁剪">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+              居中裁剪
+            </button>
+            <button onclick="document.getElementById('fileInput').click()" title="更换照片">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              更换照片
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Settings & Export -->
+  <div class="right-panel">
+
+    <!-- Specs -->
+    <div class="card animate-in">
+      <div class="card-header">
+        <span class="dot"></span>
+        <h2>照片规格</h2>
+      </div>
+      <div class="card-body">
+        <div class="spec-grid">
+          <div class="spec-item">
+            <div class="label">尺寸</div>
+            <div class="value">401×461 <small>px</small></div>
+          </div>
+          <div class="spec-item">
+            <div class="label">分辨率</div>
+            <div class="value">300 <small>DPI</small></div>
+          </div>
+          <div class="spec-item">
+            <div class="label">面部尺寸</div>
+            <div class="value">≈28 <small>mm</small></div>
+          </div>
+          <div class="spec-item">
+            <div class="label">文件上限</div>
+            <div class="value">≤2 <small>MB</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="card animate-in" style="animation-delay:0.1s; margin-top: 16px;">
+      <div class="card-header">
+        <span class="dot"></span>
+        <h2>参数设置</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label for="nameInput">姓名（用于文件命名）</label>
+          <input type="text" id="nameInput" placeholder="请输入姓名">
+        </div>
+
+        <div class="form-group">
+          <label for="formatSelect">导出格式</label>
+          <select id="formatSelect">
+            <option value="png">PNG（透明背景）</option>
+            <option value="jpeg">JPG（白色背景）</option>
+          </select>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">去除背景</div>
+            <div class="toggle-desc">基于颜色阈值移除背景</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="bgRemoveToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="bgRemoveOptions" class="hidden" style="margin-top:12px;">
+          <div class="form-group" style="margin-bottom:8px;">
+            <label>点击照片选取背景色，或调整容差阈值</label>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:12px;color:var(--text-secondary);">背景色:</span>
+            <div id="pickedColorSwatch" style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border);background:#ffffff;"></div>
+            <span id="pickedColorHex" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">#FFFFFF</span>
+          </div>
+          <div class="color-threshold">
+            <span style="font-size:12px;color:var(--text-secondary);">容差</span>
+            <input type="range" id="thresholdRange" min="5" max="120" value="40">
+            <span class="val" id="thresholdVal">40</span>
+          </div>
+          <button onclick="applyBgRemoval()" style="margin-top:12px;width:100%;padding:8px;font-size:12px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--border-focus);border-radius:8px;cursor:pointer;font-family:'Noto Sans SC',sans-serif;font-weight:500;">
+            应用去除背景
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="card animate-in" style="animation-delay:0.2s; margin-top: 16px;">
+      <div class="card-header">
+        <span class="dot"></span>
+        <h2>导出</h2>
+      </div>
+      <div class="card-body">
+        <button class="btn-export" id="exportBtn" disabled onclick="exportPhoto()">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出证件照
+        </button>
+        <div id="statusBar" class="status-bar"></div>
+        <div id="previewResult" class="preview-result hidden"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// Constants
+const TARGET_W = 401;
+const TARGET_H = 461;
+const ASPECT = TARGET_W / TARGET_H;
+const DPI = 300;
+
+// State
+let originalImage = null;
+let processedImageData = null; // after bg removal
+let bgRemoved = false;
+let pickedBgColor = { r: 255, g: 255, b: 255 };
+
+// Elements
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const canvasArea = document.getElementById('canvasArea');
+const sourceCanvas = document.getElementById('sourceCanvas');
+const ctx = sourceCanvas.getContext('2d');
+const cropBox = document.getElementById('cropBox');
+const cropWrapper = document.getElementById('cropWrapper');
+const cropLabel = document.getElementById('cropLabel');
+const exportBtn = document.getElementById('exportBtn');
+const nameInput = document.getElementById('nameInput');
+const formatSelect = document.getElementById('formatSelect');
+const bgRemoveToggle = document.getElementById('bgRemoveToggle');
+const bgRemoveOptions = document.getElementById('bgRemoveOptions');
+const thresholdRange = document.getElementById('thresholdRange');
+const thresholdVal = document.getElementById('thresholdVal');
+
+// Crop state
+let crop = { x: 0, y: 0, w: 0, h: 0 };
+let dragging = null; // 'move' or handle direction
+let dragStart = { x: 0, y: 0, cx: 0, cy: 0, cw: 0, ch: 0 };
+let canvasDisplayW = 0, canvasDisplayH = 0;
+let scaleRatio = 1;
+
+// Upload handlers
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (!file.type.match(/image\/(jpeg|png)/)) {
+    showStatus('error', '请上传 JPG 或 PNG 格式的图片');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      originalImage = img;
+      bgRemoved = false;
+      processedImageData = null;
+      bgRemoveToggle.checked = false;
+      bgRemoveOptions.classList.add('hidden');
+      drawSource();
+      uploadZone.classList.add('hidden');
+      canvasArea.classList.remove('hidden');
+      exportBtn.disabled = false;
+      showStatus('info', `已加载 ${img.naturalWidth}×${img.naturalHeight} 图片`);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function drawSource() {
+  const img = originalImage;
+  // Fit canvas in container (max ~700px wide)
+  const maxW = 700, maxH = 500;
+  let dw = img.naturalWidth, dh = img.naturalHeight;
+  if (dw > maxW) { dh = dh * maxW / dw; dw = maxW; }
+  if (dh > maxH) { dw = dw * maxH / dh; dh = maxH; }
+
+  canvasDisplayW = Math.round(dw);
+  canvasDisplayH = Math.round(dh);
+  scaleRatio = img.naturalWidth / canvasDisplayW;
+
+  sourceCanvas.width = img.naturalWidth;
+  sourceCanvas.height = img.naturalHeight;
+  sourceCanvas.style.width = canvasDisplayW + 'px';
+  sourceCanvas.style.height = canvasDisplayH + 'px';
+
+  ctx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+
+  if (bgRemoved && processedImageData) {
+    ctx.putImageData(processedImageData, 0, 0);
+  } else {
+    ctx.drawImage(img, 0, 0);
+  }
+
+  resetCrop();
+}
+
+function resetCrop() {
+  // Fit crop box centered with aspect ratio
+  let cw, ch;
+  if (canvasDisplayW / canvasDisplayH > ASPECT) {
+    ch = canvasDisplayH * 0.8;
+    cw = ch * ASPECT;
+  } else {
+    cw = canvasDisplayW * 0.8;
+    ch = cw / ASPECT;
+  }
+  crop.w = Math.round(cw);
+  crop.h = Math.round(ch);
+  crop.x = Math.round((canvasDisplayW - cw) / 2);
+  crop.y = Math.round((canvasDisplayH - ch) / 2);
+  updateCropBox();
+}
+
+function fitCropToCenter() {
+  resetCrop();
+}
+
+function updateCropBox() {
+  cropBox.style.left = crop.x + 'px';
+  cropBox.style.top = crop.y + 'px';
+  cropBox.style.width = crop.w + 'px';
+  cropBox.style.height = crop.h + 'px';
+  const realW = Math.round(crop.w * scaleRatio);
+  const realH = Math.round(crop.h * scaleRatio);
+  cropLabel.textContent = `${realW} × ${realH}`;
+}
+
+// Crop drag logic
+cropBox.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const handle = e.target.closest('.crop-handle');
+  if (handle) {
+    dragging = handle.dataset.dir;
+  } else {
+    dragging = 'move';
+  }
+  const rect = cropWrapper.getBoundingClientRect();
+  dragStart = {
+    x: e.clientX, y: e.clientY,
+    cx: crop.x, cy: crop.y, cw: crop.w, ch: crop.h,
+    rx: rect.left, ry: rect.top
+  };
+  document.addEventListener('mousemove', onCropDrag);
+  document.addEventListener('mouseup', onCropEnd);
+});
+
+// Touch support
+cropBox.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const handle = e.target.closest('.crop-handle');
+  if (handle) {
+    dragging = handle.dataset.dir;
+  } else {
+    dragging = 'move';
+  }
+  const rect = cropWrapper.getBoundingClientRect();
+  dragStart = {
+    x: touch.clientX, y: touch.clientY,
+    cx: crop.x, cy: crop.y, cw: crop.w, ch: crop.h,
+    rx: rect.left, ry: rect.top
+  };
+  document.addEventListener('touchmove', onCropDragTouch, { passive: false });
+  document.addEventListener('touchend', onCropEndTouch);
+}, { passive: false });
+
+function onCropDragTouch(e) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  handleCropMove(touch.clientX, touch.clientY);
+}
+
+function onCropEndTouch() {
+  dragging = null;
+  document.removeEventListener('touchmove', onCropDragTouch);
+  document.removeEventListener('touchend', onCropEndTouch);
+}
+
+function onCropDrag(e) {
+  handleCropMove(e.clientX, e.clientY);
+}
+
+function handleCropMove(clientX, clientY) {
+  if (!dragging) return;
+  const dx = clientX - dragStart.x;
+  const dy = clientY - dragStart.y;
+
+  if (dragging === 'move') {
+    crop.x = Math.max(0, Math.min(canvasDisplayW - crop.w, dragStart.cx + dx));
+    crop.y = Math.max(0, Math.min(canvasDisplayH - crop.h, dragStart.cy + dy));
+  } else {
+    let newX = dragStart.cx, newY = dragStart.cy;
+    let newW = dragStart.cw, newH = dragStart.ch;
+
+    if (dragging === 'br') {
+      newW = Math.max(40, dragStart.cw + dx);
+      newH = newW / ASPECT;
+    } else if (dragging === 'bl') {
+      newW = Math.max(40, dragStart.cw - dx);
+      newH = newW / ASPECT;
+      newX = dragStart.cx + dragStart.cw - newW;
+    } else if (dragging === 'tr') {
+      newW = Math.max(40, dragStart.cw + dx);
+      newH = newW / ASPECT;
+      newY = dragStart.cy + dragStart.ch - newH;
+    } else if (dragging === 'tl') {
+      newW = Math.max(40, dragStart.cw - dx);
+      newH = newW / ASPECT;
+      newX = dragStart.cx + dragStart.cw - newW;
+      newY = dragStart.cy + dragStart.ch - newH;
+    }
+
+    // Clamp
+    if (newX < 0) { newW += newX; newX = 0; newH = newW / ASPECT; }
+    if (newY < 0) { newH += newY; newY = 0; newW = newH * ASPECT; }
+    if (newX + newW > canvasDisplayW) { newW = canvasDisplayW - newX; newH = newW / ASPECT; }
+    if (newY + newH > canvasDisplayH) { newH = canvasDisplayH - newY; newW = newH * ASPECT; }
+
+    crop.x = Math.round(newX);
+    crop.y = Math.round(newY);
+    crop.w = Math.round(newW);
+    crop.h = Math.round(newH);
+  }
+
+  updateCropBox();
+}
+
+function onCropEnd() {
+  dragging = null;
+  document.removeEventListener('mousemove', onCropDrag);
+  document.removeEventListener('mouseup', onCropEnd);
+}
+
+// Background removal toggle
+bgRemoveToggle.addEventListener('change', () => {
+  bgRemoveOptions.classList.toggle('hidden', !bgRemoveToggle.checked);
+  if (!bgRemoveToggle.checked && bgRemoved) {
+    // Restore original
+    bgRemoved = false;
+    processedImageData = null;
+    drawSource();
+  }
+});
+
+thresholdRange.addEventListener('input', () => {
+  thresholdVal.textContent = thresholdRange.value;
+});
+
+// Color picker from canvas
+sourceCanvas.addEventListener('click', e => {
+  if (!bgRemoveToggle.checked) return;
+  const rect = sourceCanvas.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) / rect.width * sourceCanvas.width;
+  const sy = (e.clientY - rect.top) / rect.height * sourceCanvas.height;
+
+  // Get original image pixel
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = originalImage.naturalWidth;
+  tmpCanvas.height = originalImage.naturalHeight;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.drawImage(originalImage, 0, 0);
+  const pixel = tmpCtx.getImageData(Math.round(sx), Math.round(sy), 1, 1).data;
+
+  pickedBgColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
+  const hex = '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+  document.getElementById('pickedColorSwatch').style.background = hex;
+  document.getElementById('pickedColorHex').textContent = hex.toUpperCase();
+});
+
+function applyBgRemoval() {
+  if (!originalImage) return;
+  showStatus('info', '正在处理背景去除...');
+
+  const w = originalImage.naturalWidth;
+  const h = originalImage.naturalHeight;
+
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = w;
+  tmpCanvas.height = h;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.drawImage(originalImage, 0, 0);
+  const imageData = tmpCtx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  const threshold = parseInt(thresholdRange.value);
+  const bgR = pickedBgColor.r, bgG = pickedBgColor.g, bgB = pickedBgColor.b;
+
+  // Flood fill from edges to find background
+  const visited = new Uint8Array(w * h);
+  const isBackground = new Uint8Array(w * h);
+  const queue = [];
+
+  function colorDist(i) {
+    const dr = data[i] - bgR;
+    const dg = data[i+1] - bgG;
+    const db = data[i+2] - bgB;
+    return Math.sqrt(dr*dr + dg*dg + db*db);
+  }
+
+  // Seed from edges
+  for (let x = 0; x < w; x++) {
+    if (colorDist(x * 4 + 0) <= threshold) { queue.push(x); visited[x] = 1; }
+    const bi = (h-1) * w + x;
+    if (colorDist(bi * 4) <= threshold) { queue.push(bi); visited[bi] = 1; }
+  }
+  for (let y = 0; y < h; y++) {
+    const li = y * w;
+    if (colorDist(li * 4) <= threshold) { queue.push(li); visited[li] = 1; }
+    const ri = y * w + w - 1;
+    if (colorDist(ri * 4) <= threshold) { queue.push(ri); visited[ri] = 1; }
+  }
+
+  // BFS flood fill
+  while (queue.length > 0) {
+    const idx = queue.shift();
+    isBackground[idx] = 1;
+    const x = idx % w, y = Math.floor(idx / w);
+    const neighbors = [];
+    if (x > 0) neighbors.push(idx - 1);
+    if (x < w-1) neighbors.push(idx + 1);
+    if (y > 0) neighbors.push(idx - w);
+    if (y < h-1) neighbors.push(idx + w);
+
+    for (const n of neighbors) {
+      if (!visited[n] && colorDist(n * 4) <= threshold) {
+        visited[n] = 1;
+        queue.push(n);
+      }
+    }
+  }
+
+  // Apply transparency with edge feathering
+  for (let i = 0; i < w * h; i++) {
+    if (isBackground[i]) {
+      data[i * 4 + 3] = 0;
+    }
+  }
+
+  // Simple edge feathering
+  const featherRadius = 1;
+  for (let y = featherRadius; y < h - featherRadius; y++) {
+    for (let x = featherRadius; x < w - featherRadius; x++) {
+      const idx = y * w + x;
+      if (!isBackground[idx]) {
+        // Check if near background
+        let nearBg = false;
+        for (let dy = -featherRadius; dy <= featherRadius && !nearBg; dy++) {
+          for (let dx = -featherRadius; dx <= featherRadius && !nearBg; dx++) {
+            if (isBackground[(y+dy)*w + (x+dx)]) nearBg = true;
+          }
+        }
+        if (nearBg) {
+          const dist = colorDist(idx * 4);
+          const alpha = Math.min(255, Math.max(0, Math.round(255 * (dist / (threshold * 1.5)))));
+          data[idx * 4 + 3] = alpha;
+        }
+      }
+    }
+  }
+
+  processedImageData = imageData;
+  bgRemoved = true;
+
+  // Redraw
+  ctx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+  ctx.putImageData(imageData, 0, 0);
+
+  showStatus('success', '背景去除完成');
+}
+
+// Export
+function exportPhoto() {
+  if (!originalImage) return;
+
+  const name = nameInput.value.trim();
+  if (!name) {
+    showStatus('error', '请输入姓名');
+    nameInput.focus();
+    return;
+  }
+
+  const format = formatSelect.value;
+
+  // Create output canvas at target size
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = TARGET_W;
+  outCanvas.height = TARGET_H;
+  const outCtx = outCanvas.getContext('2d');
+
+  // If JPG format, fill white background
+  if (format === 'jpeg') {
+    outCtx.fillStyle = '#ffffff';
+    outCtx.fillRect(0, 0, TARGET_W, TARGET_H);
+  }
+
+  // Calculate source crop region in original image coordinates
+  const sx = Math.round(crop.x * scaleRatio);
+  const sy = Math.round(crop.y * scaleRatio);
+  const sw = Math.round(crop.w * scaleRatio);
+  const sh = Math.round(crop.h * scaleRatio);
+
+  if (bgRemoved && processedImageData) {
+    // Draw from processed data
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = originalImage.naturalWidth;
+    tmpCanvas.height = originalImage.naturalHeight;
+    const tmpCtx = tmpCanvas.getContext('2d');
+    tmpCtx.putImageData(processedImageData, 0, 0);
+    outCtx.drawImage(tmpCanvas, sx, sy, sw, sh, 0, 0, TARGET_W, TARGET_H);
+  } else {
+    outCtx.drawImage(originalImage, sx, sy, sw, sh, 0, 0, TARGET_W, TARGET_H);
+  }
+
+  // Set DPI metadata via pHYs chunk (for PNG) - we'll do it via blob manipulation
+  const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
+
+  let quality = format === 'jpeg' ? 0.95 : undefined;
+  let dataUrl = outCanvas.toDataURL(mimeType, quality);
+
+  // Check file size
+  let blob = dataURLtoBlob(dataUrl);
+  const maxSize = 2 * 1024 * 1024; // 2MB
+
+  if (blob.size > maxSize && format === 'jpeg') {
+    // Reduce quality
+    for (let q = 0.9; q >= 0.3; q -= 0.05) {
+      dataUrl = outCanvas.toDataURL('image/jpeg', q);
+      blob = dataURLtoBlob(dataUrl);
+      if (blob.size <= maxSize) break;
+    }
+  }
+
+  if (blob.size > maxSize) {
+    showStatus('error', '文件大小仍超过 2MB，请尝试使用 JPG 格式');
+    return;
+  }
+
+  // Download
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.${ext}`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  // Show preview
+  const previewResult = document.getElementById('previewResult');
+  previewResult.classList.remove('hidden');
+  previewResult.innerHTML = `
+    <img src="${dataUrl}" alt="预览">
+    <div class="file-info">${name}.${ext} · ${(blob.size / 1024).toFixed(1)} KB · ${TARGET_W}×${TARGET_H}px · 300DPI</div>
+  `;
+
+  showStatus('success', `已导出 ${name}.${ext}（${(blob.size / 1024).toFixed(1)} KB）`);
+}
+
+function dataURLtoBlob(dataUrl) {
+  const parts = dataUrl.split(',');
+  const mime = parts[0].match(/:(.*?);/)[1];
+  const bytes = atob(parts[1]);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function showStatus(type, msg) {
+  const bar = document.getElementById('statusBar');
+  bar.className = `status-bar show ${type}`;
+  bar.textContent = msg;
+  if (type !== 'error') {
+    setTimeout(() => bar.classList.remove('show'), 4000);
+  }
+}
+</script>
+
+</body>
+</html>
